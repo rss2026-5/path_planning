@@ -4,6 +4,7 @@ from geometry_msgs.msg import PoseArray, PoseStamped
 from nav_msgs.msg import OccupancyGrid, Odometry
 from path_planning.utils import LineTrajectory
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 
 import heapq
 import numpy as np
@@ -26,11 +27,12 @@ class PathPlan(Node):
         self.odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
         self.map_topic = self.get_parameter('map_topic').get_parameter_value().string_value
 
+        latched_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.map_sub = self.create_subscription(
             OccupancyGrid,
             self.map_topic,
             self.map_cb,
-            1)
+            latched_qos)
 
         self.goal_sub = self.create_subscription(
             PoseStamped,
@@ -65,6 +67,7 @@ class PathPlan(Node):
 
     def goal_cb(self, msg):
         if self.current_pose is None or self.map is None:
+            self.get_logger().warn(f"Not ready: map={self.map is not None}, pose={self.current_pose is not None}")
             return
         
         # pose = PoseStamped()
@@ -78,9 +81,12 @@ class PathPlan(Node):
 
         start = (self.current_pose.position.x, self.current_pose.position.y)
         end   = (msg.pose.position.x, msg.pose.position.y)
+        self.get_logger().info(f"Planning from {start} to {end}")
+
         self.plan_path(start, end, self.map)
 
     def plan_path(self, start_point, end_point, map):
+        self.trajectory.clear()
         res = map.info.resolution
         ox = map.info.origin.position.x
         oy = map.info.origin.position.y
@@ -88,16 +94,23 @@ class PathPlan(Node):
         height = map.info.height
         grid = np.array(map.data, dtype = np.int8).reshape((height,width))
 
-        obstacle_mask = grid > 50  # occupied cells
+        obstacle_mask = (grid > 50) | (grid < 0)  # occupied + unknown cells
         dilated = binary_dilation(obstacle_mask, iterations=8)
-        def world_to_pixel(x,y):
-            u = int((x - ox) / res)
-            v = int((y - oy) / res)
-            return (u,v)
-        
-        def pixel_to_world(u,v):
-            x = u * res + ox
-            y = v * res + oy
+
+        q = map.info.origin.orientation
+        yaw = np.arctan2(2.0*(q.w*q.z + q.x*q.y), 1.0 - 2.0*(q.y**2 + q.z**2))
+
+        def world_to_pixel(x, y):
+            dx, dy = x - ox, y - oy
+            cos_y, sin_y = np.cos(-yaw), np.sin(-yaw)
+            u = int((cos_y*dx - sin_y*dy) / res)
+            v = int((sin_y*dx + cos_y*dy) / res)
+            return (u, v)
+
+        def pixel_to_world(u, v):
+            cos_y, sin_y = np.cos(yaw), np.sin(yaw)
+            x = (cos_y*u - sin_y*v) * res + ox
+            y = (sin_y*u + cos_y*v) * res + oy
             return (x, y)
         
         def is_free(u, v):
@@ -134,7 +147,7 @@ class PathPlan(Node):
         neighbors = [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)]
         found = False
         while heap:
-            f,g, current = heapq.heappop(heap)
+            _,g, current = heapq.heappop(heap)
             if current == goal:
                 found = True
                 break
@@ -159,16 +172,13 @@ class PathPlan(Node):
         node = goal
         while node is not None:
             path.append(node)
-            node = prev[node]
+            node = prev.get(node)
         path.reverse()
         for (u,v) in path:
-            x,y = pixel_to_world(u,v)
-            self.trajectory.addPoint(x,y)
+            self.trajectory.addPoint(pixel_to_world(u, v))
         
         self.traj_pub.publish(self.trajectory.toPoseArray())
-        
         self.trajectory.publish_viz()
-        self.trajectory.clear()
         
         
 
