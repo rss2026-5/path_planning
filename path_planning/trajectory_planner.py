@@ -9,6 +9,9 @@ import heapq
 import numpy as np
 from scipy.ndimage import binary_dilation
 
+# import tf2_ros
+# import tf2_geometry_msgs
+
 
 class PathPlan(Node):
     """ Listens for goal pose published by RViz and uses it to plan a path from
@@ -51,6 +54,9 @@ class PathPlan(Node):
 
         self.trajectory = LineTrajectory(node=self, viz_namespace="/planned_trajectory")
 
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
     def map_cb(self, msg):
         self.map = msg
 
@@ -60,6 +66,16 @@ class PathPlan(Node):
     def goal_cb(self, msg):
         if self.current_pose is None or self.map is None:
             return
+        
+        # pose = PoseStamped()
+        # pose.header.frame_id = "base_link"
+        # pose.header.stamp = rclpy.time.Time().to_msg()
+
+        # pose.pose = self.current_pose
+
+        # # Transform into map frame
+        # pose_map = self.tf_buffer.transform(pose, "map")
+
         start = (self.current_pose.position.x, self.current_pose.position.y)
         end   = (msg.pose.position.x, msg.pose.position.y)
         self.plan_path(start, end, self.map)
@@ -69,7 +85,7 @@ class PathPlan(Node):
         ox = map.info.origin.position.x
         oy = map.info.origin.position.y
         width = map.info.width
-        height = map.info.weight
+        height = map.info.height
         grid = np.array(map.data, dtype = np.int8).reshape((height,width))
 
         obstacle_mask = grid > 50  # occupied cells
@@ -91,12 +107,29 @@ class PathPlan(Node):
 
         start = world_to_pixel(*start_point)
         goal = world_to_pixel(*end_point)
+
+        # self.get_logger().info(f"current_pose frame: {self.current_pose_frame_id}")
+
+        # self.get_logger().info(f"Start world: {start_point}")
+        # self.get_logger().info(f"Map origin: ({ox}, {oy})")
+        # self.get_logger().info(f"Resolution: {res}")
+        # self.get_logger().info(f"Map size: {width} x {height}")
+
+        if not is_free(*start):
+            self.get_logger().error(f"Start invalid: {start}")
+            return
+
+        if not is_free(*goal):
+            self.get_logger().error(f"Goal invalid: {goal}")
+            return
+
         prev = {start : None}
         g_score = {start : 0}
         
         # A* algorithm
         def h(a,b):
             return np.hypot(a[0] - b[0],a[1] - b[1])
+        
         heap = [(h(start,goal),0,start)]
         neighbors = [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)]
         found = False
@@ -117,6 +150,10 @@ class PathPlan(Node):
                     g_score[nb] = new_g
                     prev[nb] = current
                     heapq.heappush(heap,(new_g + h(nb,goal), new_g,nb))
+
+        if not found:
+            self.get_logger().warn("No path found!")
+            return
 
         path = []
         node = goal
