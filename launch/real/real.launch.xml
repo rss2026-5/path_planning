@@ -2,8 +2,8 @@
     <!-- Localization stack: map server + lifecycle manager + static TF + particle filter -->
     <include file="$(find-pkg-share localization)/launch/localize_real.launch.xml"/>
 
-    <!-- Path planner (A* grid-based) -->
-    <node pkg="path_planning" exec="trajectory_planner" name="trajectory_planner" output="screen">
+    <!-- Path planner: swap exec between "trajectory_planner" (A*) and "rrt_planner" (RRT*) -->
+    <node pkg="path_planning" exec="rrt_planner" name="trajectory_planner" output="screen">
         <param from="$(find-pkg-share path_planning)/config/real/config.yaml"/>
     </node>
 
