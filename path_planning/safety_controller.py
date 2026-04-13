@@ -23,16 +23,13 @@ class SafetyController(Node):
     obstacle distances exceed their respective thresholds + RELEASE_MARGIN.
     """
 
-    # Forward zone — head-on collision prevention
     FORWARD_CONE = np.pi / 3        # ±60 deg
-    EMERGENCY_DIST = 0.25           # hard-stop threshold [m]
+    EMERGENCY_DIST = 0.45           # hard-stop threshold [m] — accounts for braking at speed
     RELEASE_MARGIN = 0.15           # hysteresis margin [m]
 
-    # Side zone — wheel / corner clipping prevention
     SIDE_CONE = 5 * np.pi / 12      # ±75 deg outer boundary
-    SIDE_DIST = 0.10                # side hard-stop threshold [m]
+    SIDE_DIST = 0.15                # side hard-stop threshold [m]
 
-    # Use a robust percentile (not min) to ignore single noisy returns
     RANGE_PERCENTILE = 10
 
     def __init__(self):

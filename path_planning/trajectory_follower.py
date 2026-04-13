@@ -122,18 +122,23 @@ class PurePursuit(Node):
         local_x = np.cos(yaw) * dx + np.sin(yaw) * dy
         local_y = -np.sin(yaw) * dx + np.cos(yaw) * dy
 
-        # If lookahead point is behind the car, just drive straight (will correct)
+        # If lookahead point is behind the car, reverse toward it with
+        # mirrored steering (inspired by visual_servoing parking controller).
         if local_x <= 0.0:
-            self._publish_drive(self.speed, 0.0)
+            rear_dist = np.sqrt(local_x ** 2 + local_y ** 2)
+            if rear_dist < 1e-3:
+                self._publish_drive(0.0, 0.0)
+                return
+            angle_to_target = np.arctan2(-local_y, -local_x)
+            steering_angle = np.clip(angle_to_target, -self.max_steer, self.max_steer)
+            self._publish_drive(-self.speed * 0.5, steering_angle)
             return
 
         # 4) Pure pursuit steering law
-        # curvature = 2 * local_y / L_d^2
         L_d_sq = local_x ** 2 + local_y ** 2
         curvature = 2.0 * local_y / L_d_sq
         steering_angle = np.arctan(self.wheelbase_length * curvature)
 
-        # Clamp steering
         steering_angle = np.clip(steering_angle, -self.max_steer, self.max_steer)
 
         self._publish_drive(self.speed, steering_angle)
