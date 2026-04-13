@@ -1,3 +1,13 @@
 *.pyc
 .idea/
 __pycache__/
+
+# ROS build artifacts
+build/
+install/
+log/
+
+# Rosbag files — never commit these, they are large
+bag_files/
+*.db3
+*.mcap
