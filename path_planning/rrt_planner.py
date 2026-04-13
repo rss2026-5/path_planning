@@ -4,6 +4,7 @@ from geometry_msgs.msg import PoseArray, PoseStamped
 from nav_msgs.msg import OccupancyGrid, Odometry
 from path_planning.utils import LineTrajectory
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 
 import numpy as np
 from scipy.ndimage import binary_dilation
@@ -31,11 +32,12 @@ class RRTStarPlanner(Node):
         self.odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
         self.map_topic = self.get_parameter('map_topic').get_parameter_value().string_value
 
+        latched_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.map_sub = self.create_subscription(
             OccupancyGrid,
             self.map_topic,
             self.map_cb,
-            1)
+            latched_qos)
 
         self.goal_sub = self.create_subscription(
             PoseStamped,
@@ -47,7 +49,7 @@ class RRTStarPlanner(Node):
         self.traj_pub = self.create_publisher(
             PoseArray,
             "/trajectory/current",
-            10
+            latched_qos
         )
 
         self.pose_sub = self.create_subscription(

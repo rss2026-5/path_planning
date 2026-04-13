@@ -5,6 +5,7 @@ from ackermann_msgs.msg import AckermannDriveStamped
 from geometry_msgs.msg import PoseArray
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from visualization_msgs.msg import Marker
 from .utils import LineTrajectory
 
@@ -41,8 +42,9 @@ class PurePursuit(Node):
 
         self.pose_sub = self.create_subscription(
             Odometry, self.odom_topic, self.pose_callback, 1)
+        latched_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.traj_sub = self.create_subscription(
-            PoseArray, "/trajectory/current", self.trajectory_callback, 1)
+            PoseArray, "/trajectory/current", self.trajectory_callback, latched_qos)
         self.drive_pub = self.create_publisher(
             AckermannDriveStamped, self.drive_topic, 1)
 
@@ -248,7 +250,7 @@ class PurePursuit(Node):
             return
         marker = Marker()
         marker.header.stamp = self.get_clock().now().to_msg()
-        marker.header.frame_id = "/map"
+        marker.header.frame_id = "map"
         marker.ns = "pure_pursuit"
         marker.id = 0
         marker.type = Marker.SPHERE

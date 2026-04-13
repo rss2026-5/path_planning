@@ -10,9 +10,6 @@ import heapq
 import numpy as np
 from scipy.ndimage import binary_dilation
 
-# import tf2_ros
-# import tf2_geometry_msgs
-
 
 class PathPlan(Node):
     """ Listens for goal pose published by RViz and uses it to plan a path from
@@ -41,10 +38,11 @@ class PathPlan(Node):
             10
         )
 
+        latched_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.traj_pub = self.create_publisher(
             PoseArray,
             "/trajectory/current",
-            10
+            latched_qos
         )
 
         self.pose_sub = self.create_subscription(
@@ -56,8 +54,8 @@ class PathPlan(Node):
 
         self.trajectory = LineTrajectory(node=self, viz_namespace="/planned_trajectory")
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self.map = None
+        self.current_pose = None
 
     def map_cb(self, msg):
         self.map = msg
@@ -69,15 +67,6 @@ class PathPlan(Node):
         if self.current_pose is None or self.map is None:
             self.get_logger().warn(f"Not ready: map={self.map is not None}, pose={self.current_pose is not None}")
             return
-        
-        # pose = PoseStamped()
-        # pose.header.frame_id = "base_link"
-        # pose.header.stamp = rclpy.time.Time().to_msg()
-
-        # pose.pose = self.current_pose
-
-        # # Transform into map frame
-        # pose_map = self.tf_buffer.transform(pose, "map")
 
         start = (self.current_pose.position.x, self.current_pose.position.y)
         end   = (msg.pose.position.x, msg.pose.position.y)

@@ -1,3 +1,20 @@
 <launch>
-    <!--Add your code-->
+    <!-- Localization stack: map server + lifecycle manager + static TF + particle filter -->
+    <include file="$(find-pkg-share localization)/launch/localize_real.launch.xml"/>
+
+    <!-- Path planner (A* grid-based) -->
+    <node pkg="path_planning" exec="trajectory_planner" name="trajectory_planner" output="screen">
+        <param from="$(find-pkg-share path_planning)/config/real/config.yaml"/>
+    </node>
+
+    <!-- Pure pursuit path follower -->
+    <node pkg="path_planning" exec="trajectory_follower" name="trajectory_follower" output="screen">
+        <param from="$(find-pkg-share path_planning)/config/real/config.yaml"/>
+    </node>
+
+    <!-- Safety controller: emergency stop for unmapped obstacles and corner clipping -->
+    <node pkg="path_planning" exec="safety_controller" name="safety_controller" output="screen">
+        <param name="scan_topic" value="/scan"/>
+        <param name="safety_topic" value="/vesc/low_level/input/safety"/>
+    </node>
 </launch>
